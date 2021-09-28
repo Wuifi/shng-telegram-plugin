@@ -63,7 +63,7 @@ MESSAGE_TAG_DEST          = '[DEST]'
 
 class Telegram(SmartPlugin):
 
-    PLUGIN_VERSION = "1.6.5"
+    PLUGIN_VERSION = "1.6.6"
 
     _items = []              # all items using attribute ``telegram_message```
     _items_info = {}         # dict used whith the info-command: key = attribute_value, val= item_list telegram_info
@@ -348,7 +348,6 @@ class Telegram(SmartPlugin):
             except Exception as e:
                     self.logger.debug("Exception '{0}' occurred, please inform plugin maintainer!".format(e))
 
-
     def photo_broadcast(self, photofile_or_url, caption=None, chat_id=None, local_prepare=True):
         """
         Send an image to the given chat
@@ -519,8 +518,7 @@ class Telegram(SmartPlugin):
         if self.has_access_right( update.message.chat.id ):
             hide_keyboard = {'hide_keyboard': True}
             context.bot.send_message(chat_id=update.message.chat.id, text=self.translate("I'll hide the keyboard"), reply_markup=hide_keyboard)
-    
-    
+
     def cHandler_list(self, update, context):
         """
         /list: show registered items and value
@@ -566,8 +564,6 @@ class Telegram(SmartPlugin):
             self.logger.warning('No chat_ids defined')
         
         context.bot.send_message(chat_id=update.message.chat.id, text=text)
-       
-        
 
     def cHandler_info_attr(self, update, context):
         """
@@ -611,8 +607,7 @@ class Telegram(SmartPlugin):
                 tmp_msg+=("\n")
             self.logger.info("send Message: {0}".format(tmp_msg))
             self._bot.sendMessage(chat_id=update.message.chat.id, text=tmp_msg)
-            
-    
+
     def cHandler_tr(self, update, context):
         """
         Trigger a logic with command ``/tr xx`` where xx is the name of the logic to trigger
@@ -690,7 +685,6 @@ class Telegram(SmartPlugin):
         if footer_buttons:
             menu.append(footer_buttons)
         return menu
-
 
     def init_webinterface(self):
         """

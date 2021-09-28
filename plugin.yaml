@@ -12,7 +12,7 @@ plugin:
     documentation: http://smarthomeng.de/user/plugins/telegram/user_doc.html
     support: https://knx-user-forum.de/forum/supportforen/smarthome-py/1548691-support-thread-für-das-telegram-plugin
 
-    version: 1.6.5                  # Plugin version
+    version: 1.6.6                  # Plugin version
     sh_minversion: 1.3              # minimum shNG version to use this plugin
 #    sh_maxversion:                 # maximum shNG version to use this plugin (leave empty if latest)
     multi_instance: True            # plugin supports multi instance
@@ -94,8 +94,8 @@ item_attributes:
     telegram_text:
         type: str
         description:
-            de: 'Mitteilungstext als Itemwert setzen'
-            en: 'write message-text into the item'
+            de: 'Mitteilungstext als Itemwert setzen Das Format ist @user: Chat-ID: msg'
+            en: 'write message-text into the item; Format is @user: Chat-ID: msg''
 
     telegram_value_match_regex:
         type: str
