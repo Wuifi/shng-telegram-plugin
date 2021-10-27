@@ -34,7 +34,7 @@ Der BotFather erstellt für den neuen Bot ein sogenanntes **token** also einen e
 Konfiguration des Plugins
 =========================
 
-Die Konfiguration des Plugins ist in der **plugin.yaml** nachzulesen.
+Die Konfiguration des Plugins ist auch unter :doc:`/plugins_doc/config/telegram` beschrieben bzw. in der **plugin.yaml** nachzulesen.
 
 
 Der erstelle **token** muß in der ``plugin.yaml`` von SmartHomeNG eingetragen werden. Das kann im Admin-IF geschehen oder durch direkten Eintrag in die ``plugin.yaml``.
@@ -119,10 +119,35 @@ Beispiel mit Platzhaltern
        visu_acl: r
        cache: 'on'
        telegram_message: 'New AutoBlind state: [VALUE]'
+       
+       
+telegram_condition
+------------------
+
+Da es Situationen gibt die für Items ein ``enforce_updates: True`` benötigen, würde bei ``telegram_message`` bei jeder Aktualisierung des Items eine Nachricht verschickt werden.
+Um das zu verhindern, kann einem Item das Attribut ``telegram_condition: on_change`` zugewiesen werden.
+
+Einfaches Beispiel
+''''''''''''''''''
+
+.. code:: yaml
+
+   Tuerklingel:
+       type: bool
+       knx_dpt: 1
+       enforce_updates: True
+       telegram_message: 'Es klingelt an der Tür'
+       telegram_condition: on_change
+       telegram_value_match_regex: (true|True|1)
+
+Dadurch wird auf eine mehrfache Zuweisung des Items mit dem Wert ``True`` nur einmal mit einer Nachricht reagiert. Um eine weitere Nachricht zu generieren
+muss das Item zunächst wieder den Wert ``False`` annehmen. Das Attribut ``telegram_value_match_regex`` filtert den Wert so das es bei der Änderung des Itemwertes 
+auf ``False`` zu keiner Meldung *Es klingelt an der Tür* kommt.
 
 
 telegram_value_match_regex
 --------------------------
+
 Ist zusätzlich zum Attribut ``telegram_message`` auch das Attribut ``telegram_value_match_regex`` gesetzt, wird der Itemwert geprüft, bevor eine
 Nachricht gesendet wird. Geprüft wird gegen/mit den Regex, der als Parameterwert angegeben ist.
 
@@ -141,6 +166,25 @@ Beispiel
        cache: True
        telegram_message: "TestBool: [VALUE]"
        telegram_value_match_regex: 1            # nur Nachricht senden wenn 1 (True)
+       
+       
+telegram_message_chat_id     
+------------------------
+Ist zusätzlich zum Attribut ``telegram_message`` auch das Attribut ``telegram_message_chat_id`` gesetzt, wird die Nachricht nur an die dort angegebene Chat-ID (hier 3234123342) gesendet.
+Ist das Attribut nicht gesetzt, erfolgt der Versand der Nachricht an alle Chat-IDs, die dem Plugin bekannt sind.
+
+Einfaches Beispiel
+''''''''''''''''''
+
+.. code:: yaml
+
+   Tuerklingel:
+       type: bool
+       knx_dpt: 1
+       enforce_updates: True
+       telegram_message: 'Es klingelt an der Tür'
+       telegram_message_chat_id: 3234123342
+       telegram_value_match_regex: (true|True|1)
 
 
 telegram_info

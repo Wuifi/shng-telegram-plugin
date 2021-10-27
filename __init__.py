@@ -3,7 +3,7 @@
 #########################################################################
 # Copyright 2017 Markus Garscha                 http://knx-user-forum.de/
 #           2018 Ivan De Filippis
-#           2018-2020 Bernd Meiners                 Bernd.Meiners@mail.de
+#           2018-2021 Bernd Meiners                 Bernd.Meiners@mail.de
 #########################################################################
 #
 #  This file is part of SmartHomeNG.
@@ -23,7 +23,6 @@
 #
 #########################################################################
 
-import time
 import datetime
 import logging
 import re
@@ -46,8 +45,10 @@ try:
 except:
     REQUIRED_PACKAGE_IMPORTED = False
 
-ITEM_ATTR_MESSAGE         = 'telegram_message'            # Send message on item change 
-ITEM_ATTR_INFO            = 'telegram_info'               # read items with specific item-values 
+ITEM_ATTR_MESSAGE         = 'telegram_message'            # Send message on item change
+ITEM_ATTR_CONDITION       = 'telegram_condition'          # when to send the message, if not given send any time,
+                                                          #   if on_change_only then just if the item's current value differs from the previous value
+ITEM_ATTR_INFO            = 'telegram_info'               # read items with specific item-values
 ITEM_ATTR_TEXT            = 'telegram_text'               # write message-text into the item
 ITEM_ATTR_MATCHREGEX      = 'telegram_value_match_regex'  # check a value against a condition before sending a message
 ITEM_ATTR_CHAT_IDS        = 'telegram_chat_ids'
@@ -63,7 +64,7 @@ MESSAGE_TAG_DEST          = '[DEST]'
 
 class Telegram(SmartPlugin):
 
-    PLUGIN_VERSION = "1.6.6"
+    PLUGIN_VERSION = "1.6.7"
 
     _items = []              # all items using attribute ``telegram_message```
     _items_info = {}         # dict used whith the info-command: key = attribute_value, val= item_list telegram_info
@@ -75,7 +76,7 @@ class Telegram(SmartPlugin):
         Initializes the Telegram plugin
         The params are documented in ``plugin.yaml`` and values will be obtained through get_parameter_value(parameter_name)
         """
-        
+
         from bin.smarthome import VERSION
         if '.'.join(VERSION.split('.', 2)[:2]) <= '1.5':
             self.logger = logging.getLogger(__name__)
@@ -103,7 +104,7 @@ class Telegram(SmartPlugin):
 
         # the Updater class continuously fetches new updates from telegram and passes them on to the Dispatcher class.
         try:
-            self._updater = Updater(token=self._token, use_context=True) 
+            self._updater = Updater(token=self._token, use_context=True)
             self._bot = self._updater.bot
             self.logger.info("Telegram bot is listening: {0}".format(self._bot.getMe()))
         except TelegramError as e:
@@ -139,7 +140,7 @@ class Telegram(SmartPlugin):
         Provide a way to use the plugin to easily send a message
         """
         if self.alive:
-            if chat_id == None:
+            if chat_id is None:
                 self.msg_broadcast(msg)
             else:
                 self.msg_broadcast(msg, chat_id)
@@ -156,12 +157,12 @@ class Telegram(SmartPlugin):
                 self.logger.debug("Changing Telegrams thread names to pretty thread names")
             try:
                 for t in self._updater._Updater__threads:
-                  if 'dispatcher' in t.name: 
+                  if 'dispatcher' in t.name:
                     t.name = 'Telegram Dispatcher'
-                    
-                  if 'updater' in t.name: 
+
+                  if 'updater' in t.name:
                     t.name = 'Telegram Updater'
-                    
+
                 for t in self._updater.dispatcher._Dispatcher__async_threads:
                   *_, num = t.name.split('_')
                   t.name = 'Telegram Worker {}'.format(num) if num.isnumeric() else num
@@ -283,16 +284,14 @@ class Telegram(SmartPlugin):
                 item_value = '1' if item_value == True else '0' if item_value == False else None
             else:
                 item_value = "{0}".format(item())
-            
+
             if self.has_iattr(item.conf, ITEM_ATTR_MATCHREGEX):
                 val_match = self.get_iattr_value(item.conf, ITEM_ATTR_MATCHREGEX)
                 self.logger.info("val_match: {0}".format(val_match))
 
                 # TO_TEST: ITEM_ATTR_MATCHREGEX
                 p = re.compile(val_match)
-                # self.logger.info("p: {0}".format(p))
                 m = p.match(item_value)
-                # self.logger.info("m: {0}".format(m))
                 if m:
                     self.logger.info("Match found: {0}".format(m.group()))
                 else:
@@ -316,9 +315,6 @@ class Telegram(SmartPlugin):
             msg_txt = msg_txt.replace(MESSAGE_TAG_SOURCE, source)
             msg_txt = msg_txt.replace(MESSAGE_TAG_DEST, dest)
 
-            # DEBUG
-            # msg_txt = msg_txt_tmpl
-
             if self.has_iattr(item.conf, ITEM_ATTR_MSG_ID):
                 msg_chat_id = self.get_iattr_value(item.conf, ITEM_ATTR_MSG_ID)
                 msg_chat_id_txt = str(msg_chat_id)
@@ -326,13 +322,28 @@ class Telegram(SmartPlugin):
                 msg_chat_id = None
                 msg_chat_id_txt = 'all'
 
+            # restricing send by a condition set
+            if self.has_iattr(item.conf, ITEM_ATTR_CONDITION):
+                cond = self.get_iattr_value(item.conf, ITEM_ATTR_CONDITION).lower()
+                if cond == "on_change":
+                    if item.property.value != item.property.last_value and item.property.last_update <= item.property.last_change:
+                        self.logger.debug("condition {} met: {}!={}, last_update_age {}, last_change_age {}".format(cond,item.property.value,item.property.last_value, item.property.last_update, item.property.last_change))
+                    else:
+                        self.logger.debug("condition {} not met: {}=={}, last_update_age {}, last_change_age {}".format(cond,item.property.value,item.property.last_value, item.property.last_update, item.property.last_change))
+                        return
+                elif cond == "on_update":
+                    # this is standard behaviour
+                    pass
+                else:
+                    self.logger.debug("ignoring unknown condition {}".format(cond))
+
             self.logger.debug(f"send Message: {msg_txt} to Chat_ID {msg_chat_id_txt}")
             self.msg_broadcast(msg_txt, msg_chat_id)
 
     def _msg_broadcast(self, msg, chat_id=None):
         self.logger.warning("deprecated, please use msg_broadcast instead")
         self.msg_broadcast(msg, chat_id)
-    
+
     def msg_broadcast(self, msg, chat_id=None, reply_markup=None, parse_mode=None):
         """
         Send a message to the given chat_id
@@ -354,7 +365,7 @@ class Telegram(SmartPlugin):
 
         :param photofile_or_url: either a local file or a URL with a link to an image resource
         :param local_prepare: Image will be prepared locally instead of passing a link to Telegram. Needed if an image e.g. of a local network webcam is to be sent.
-        :param title: caption of image to send
+        :param caption: caption of image to send
         :param chat_id: a chat id or a list of chat ids to identificate the chat(s)
         """
         for cid in self.get_chat_id_list(chat_id):
@@ -370,7 +381,7 @@ class Telegram(SmartPlugin):
                     self._bot.send_photo(chat_id=cid, photo=open(str(photofile_or_url),'rb'), caption=caption)
             except Exception as e:
                 self.logger.error("Error '{}' could not send image {} to chat id {}".format(e,photofile_or_url,cid))
-                
+
     def get_chat_id_list(self, att_chat_id):
         chat_ids_to_send = []                           # new list
         if att_chat_id is None:                         # no attribute specified
@@ -414,16 +425,16 @@ class Telegram(SmartPlugin):
         When expressed as a dict, the structure of update Object is similar to the following:
         ```python
         'update_id': 081512345
-        'message': 
+        'message':
             'message_id': 16719
             'date': 1601107823
-            'chat': 
+            'chat':
                 'id': 471112345
                 'type': 'private'
                 'first_name': 'John'
                 'last_name': 'Doe'
             'text': '/help'
-            'entities': 
+            'entities':
                 - 'type': 'bot_command'
                 - 'offset': 0
                 - 'length': 5
@@ -462,7 +473,7 @@ class Telegram(SmartPlugin):
         update_queue
         user_data
         """
-            
+
     def eHandler(self, update, context ):
         """
         Just logs an error in case of a problem
@@ -471,7 +482,7 @@ class Telegram(SmartPlugin):
             self.logger.warning('Update {} caused error {}'.format(update, context.error))
         except:
             pass
-        
+
     def mHandler(self, update, context):
         """
         write the content (text) of the message in an SH-item
@@ -490,7 +501,7 @@ class Telegram(SmartPlugin):
                     item(text, caller=self.get_fullname())      # write text to SH-item
             except Exception as e:
                     self.logger.debug("Exception '{0}' occurred, traceback '{1}'please inform plugin maintainer!".format(e,traceback.format_exc()))
-    
+
     def cHandler_time(self, update, context):
         """
         /time: return server time
@@ -562,7 +573,7 @@ class Telegram(SmartPlugin):
                 text=text+self.translate(", please add it to the list of trusted chat ids to get access")
         else:
             self.logger.warning('No chat_ids defined')
-        
+
         context.bot.send_message(chat_id=update.message.chat.id, text=text)
 
     def cHandler_info_attr(self, update, context):
@@ -580,7 +591,7 @@ class Telegram(SmartPlugin):
                 if self.logger.isEnabledFor(logging.DEBUG):
                     self.logger.debug("info-command: {0}".format(c_key))
                 self.list_items_info(update.message.chat_id, c_key)
-            else:    
+            else:
                 self._bot.sendMessage(chat_id=update.message.chat.id, text=self.translate("unknown command %s") % (c_key))
         else:
             if self.logger.isEnabledFor(logging.DEBUG):
@@ -638,7 +649,7 @@ class Telegram(SmartPlugin):
             if not text:
                 text = "no items found with the attribute:" + ITEM_ATTR_MESSAGE
             self._bot.sendMessage(chat_id=chat_id, text=text)
-        
+
     def list_items_info(self, chat_id, key):
         """
         Show registered items and value with specific attribute/key
@@ -699,7 +710,7 @@ class Telegram(SmartPlugin):
         if self.mod_http == None:
             self.logger.error("Plugin '{}': Not initializing the web interface".format(self.get_shortname()))
             return False
-        
+
         import sys
         if not "SmartPluginWebIf" in list(sys.modules['lib.model.smartplugin'].__dict__):
             self.logger.warning("Plugin '{}': Web interface needs SmartHomeNG v1.5 and up. Not initializing the web interface".format(self.get_shortname()))
@@ -716,14 +727,14 @@ class Telegram(SmartPlugin):
                 'tools.staticdir.dir': 'static'
             }
         }
-        
+
         # Register the web interface as a cherrypy app
-        self.mod_http.register_webif(WebInterface(webif_dir, self), 
-                                     self.get_shortname(), 
-                                     config, 
+        self.mod_http.register_webif(WebInterface(webif_dir, self),
+                                     self.get_shortname(),
+                                     config,
                                      self.get_classname(), self.get_instance_name(),
                                      description='')
-                                   
+
         return True
 
 # ------------------------------------------
@@ -738,7 +749,7 @@ class WebInterface(SmartPluginWebIf):
     def __init__(self, webif_dir, plugin):
         """
         Initialization of instance of class WebInterface
-        
+
         :param webif_dir: directory where the webinterface of the plugin resides
         :param plugin: instance of the plugin
         :type webif_dir: str
@@ -754,10 +765,10 @@ class WebInterface(SmartPluginWebIf):
     def index(self, reload=None):
         """
         Build index.html for cherrypy
-        
+
         Render the template and return the html file to be delivered to the browser
-            
-        :return: contents of the template after beeing rendered 
+
+        :return: contents of the template after beeing rendered
         """
         tmpl = self.tplenv.get_template('index.html')
         # add values to be passed to the Jinja2 template eg: tmpl.render(p=self.plugin, interface=interface, ...)
